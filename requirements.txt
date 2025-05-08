@@ -1,0 +1,8 @@
+sentence-transformers
+faiss-cpu
+tqdm
+lxml
+beautifulsoup4
+numpy
+scikit-learn
+streamlit  # optional
