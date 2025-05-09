@@ -3,13 +3,18 @@ import json
 import os
 import re
 from lxml import etree
+try:
+    from tqdm.notebook import tqdm
+except ImportError:
+    from tqdm import tqdm
 
 def clean_text(text):
+    """
+    Cleans input text by decoding HTML entities, removing escaped newlines, 
+    and normalizing whitespace.
+    """
     # Unescape HTML entities (e.g., &quot;)
     text = html.unescape(text)
-
-    # Replace literal escaped newlines (like \\n) with a space
-    text = text.replace("\\n", " ")
 
     # Normalize whitespace
     text = re.sub(r"\s+", " ", text).strip()
@@ -17,24 +22,46 @@ def clean_text(text):
     return text
 
 
+def delete_files_in_dir_based_on_ext(folder_path, ext):
+    """
+    Deletes all files in the specified folder that do NOT have given extension.
+
+    """
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+
+        # Check if it's a file and not a directory
+        if os.path.isfile(file_path):
+            # Delete if it is not a .ext file
+            if not filename.endswith(ext):
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
+            else:
+                print(f"Preserved: {file_path}")
+
+
 def parse_docstring(file_path):
-    """Parse docstring XML fragments and return a dictionary of its contents, handling malformed XML. Only returns articles with at least 100 words."""
+    """
+    Parses a single XML fragment file containing <doc> elements from Wikipedia. 
+    Wraps the content in a root tag to handle malformed XML and extracts entries 
+    with at least 100 words.
+    """
     try:
-        # Open the file and read its contents as bytes
         with open(file_path, 'rb') as file:
             file_content = file.read()
 
-        # Wrap the content with a root element to make it valid XML
+        # Add root wrapper to handle broken XML structure
         wrapped_content = b"<root>" + file_content + b"</root>"
-
-        # Try to parse the wrapped XML
         tree = etree.fromstring(wrapped_content)
 
         doc_info = []
+
+        # Iterate over all <doc> elements in the file
         for doc in tree.findall('doc'):
             content = doc.text.strip() if doc.text else ""
             word_count = len(content.split())
 
+            # Filter out very short entries
             if word_count >= 100:
                 doc_data = {
                     'id': doc.get('id'),
@@ -43,70 +70,63 @@ def parse_docstring(file_path):
                     'content': clean_text(content)
                 }
                 doc_info.append(doc_data)
-        
+
         return doc_info
+
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
         return []
 
 
 def save_json(file_path, data):
-    """Save data to a JSON file."""
+    """
+    Saves a list of dictionaries to a JSON file.
+    """
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, 'w', encoding='utf-8') as json_file:
         json.dump(data, json_file, indent=4, ensure_ascii=False)
 
 
+
 def traverse_directory(input_dir, output_dir):
-    """Recursively traverse the directory and save each file's content to separate JSON files."""
-    if not os.path.exists(input_dir):
-        print(f"Input directory does not exist: {input_dir}")
-        return
-    
-    for root_dir, dirs, files in os.walk(input_dir):
-        print(f"Scanning directory: {root_dir}")
-        
-        relative_path = os.path.relpath(root_dir, input_dir)
-        
-        for file in files:
-            file_path = os.path.join(root_dir, file)
-            
-            if file:
-                # Parse and add docstring data
-                doc_data = parse_docstring(file_path)
-                
-                # Create the output JSON path
-                if relative_path == ".":
-                    output_file_path = os.path.join(output_dir, file + '.json')
-                else:
-                    output_file_path = os.path.join(output_dir, relative_path, file + '.json')
-
-                # print(f"Saving JSON to: {output_file_path}")
-                save_json(output_file_path, doc_data)
-
-
-def traverse_directory_to_single_json(input_dir, output_file_path):
-    """Traverse directory and save all cleaned docstring data into a single JSON file."""
+    """
+    Recursively traverses a directory tree of XML fragment files and writes 
+    cleaned JSON files to a corresponding output structure, with global progress.
+    """
     if not os.path.exists(input_dir):
         print(f"Input directory does not exist: {input_dir}")
         return
 
-    all_docs = []
-
-    for root_dir, dirs, files in os.walk(input_dir):
-        print(f"Scanning directory: {root_dir}")
-        
+    # Collect all file paths
+    all_files = []
+    for root_dir, _, files in os.walk(input_dir):
         for file in files:
             file_path = os.path.join(root_dir, file)
-            
-            if file:
-                # Parse and collect docstring data
-                doc_data = parse_docstring(file_path)
-                
-                all_docs.extend(doc_data)
+            all_files.append(file_path)
 
-    # Save all docs to a single JSON file
-    print(f"Saving JSON to: {output_file_path}")
-    save_json(output_file_path, all_docs)
-    
+    # Traverse with global progress bar
+    for file_path in tqdm(all_files, desc="Processing XML files", unit="file"):
+        # Relative path to recreate output structure
+        relative_path = os.path.relpath(os.path.dirname(file_path), input_dir)
+        file_name = os.path.basename(file_path)
 
+        # Parse and clean content
+        doc_data = parse_docstring(file_path)
+
+        # Create output file path
+        if relative_path == ".":
+            output_file_path = os.path.join(output_dir, file_name + '.json')
+        else:
+            output_file_path = os.path.join(output_dir, relative_path, file_name + '.json')
+
+        os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+
+        # Save parsed articles
+        save_json(output_file_path, doc_data)
+
+
+if __name__ == "__main__":
+    INPUT_DIR = r'../data/raw/extracted_wikidata'
+    OUTPUT_DIR = r'../data/processed/wikidata_json'
+
+    traverse_directory(INPUT_DIR, OUTPUT_DIR)
