@@ -35,9 +35,6 @@ def delete_files_in_dir_based_on_ext(folder_path, ext):
             # Delete if it is not a .ext file
             if not filename.endswith(ext):
                 os.remove(file_path)
-                print(f"Deleted: {file_path}")
-            else:
-                print(f"Preserved: {file_path}")
 
 
 def parse_docstring(file_path):
