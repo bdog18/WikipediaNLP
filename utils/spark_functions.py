@@ -82,6 +82,16 @@ def create_triplets(df):
 
     return triplets
 
+def count_triplets_with_spark(spark, input_dir):
+    # Load all .json files as a DataFrame
+    df = spark.read.json(f"{input_dir}/*.json", multiLine=False)
+
+    # Count rows (each row is one triplet)
+    count = df.count()
+
+    spark.stop()
+    return count
+
 
 if __name__ == "__main__":
     INPUT_DIR = r"../data/processed/wikidata_json"
