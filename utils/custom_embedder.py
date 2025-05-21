@@ -212,7 +212,7 @@ def train_with_config(config, vectorizer, input_dir, batch_size, steps_per_epoch
 
 
 # -----------------------------
-# Main Training Script
+# Main Script
 # -----------------------------
 if __name__ == '__main__':
     # Parameters
@@ -254,4 +254,4 @@ if __name__ == '__main__':
 
     # Save final encoder weights
     encoder.save_weights(weights_path)
-    print("✅ Training complete and weights saved.")
+    print("Training complete and weights saved.")

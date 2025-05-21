@@ -4,6 +4,7 @@ from pyspark.sql.window import Window
 import os
 import json
 
+
 def create_article_metadata(df, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -23,15 +24,16 @@ def create_article_metadata(df, output_path):
     ).fillna({"title": "Untitled", "url": ""})
 
     # Collect to driver and convert to Python list of dicts
-    print("converting to df")
-    article_metadata = metadata_df.toPandas().to_dict(orient="records")
+    # print("converting to df")
+    # article_metadata = metadata_df.toPandas().to_dict(orient="records")
 
     # Save to JSON
-    print(f"Saving {len(article_metadata)} metadata entries to {output_path}")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(article_metadata, f, ensure_ascii=False, indent=2)
+    # print(f"Saving {len(article_metadata)} metadata entries to {output_path}")
+    # with open(output_path, "w", encoding="utf-8") as f:
+    #     json.dump(article_metadata, f, ensure_ascii=False, indent=2)
+    metadata_df.write.mode("overwrite").json(output_path)
+    # print(f"Saved {len(article_metadata)} metadata entries to {output_path}")
 
-    print(f"Saved {len(article_metadata)} metadata entries to {output_path}")
 
 def create_paragraphs_df(df):
     """
@@ -48,7 +50,26 @@ def create_paragraphs_df(df):
     df = df.select("doc_id", posexplode("paragraphs").alias("paragraph_index", "content"))
     return df.filter(trim(col("content")) != "")
 
-def create_triplets(df):
+
+def create_paragraph_metadata(df, output_path):
+    os.makedirs(output_path, exist_ok=True)
+
+    # Add source_file column if needed
+    df = df.withColumn("source_file", input_file_name())
+
+    # Select relevant fields
+    metadata_df = df.select(
+        col("content").alias("text"),
+        col("doc_id"),
+        col("source_file")
+    )
+
+    print(f"Saving paragraph metadata to: {output_path}")
+    metadata_df.write.mode("overwrite").json(output_path)
+    print("✅ Paragraph metadata written as JSONL (Spark JSON format)")
+
+
+def create_random_triplets(df):
     """
     Creates triplet training examples from paragraph DataFrame.
     Anchor and positive are adjacent paragraphs from the same doc.
@@ -82,26 +103,18 @@ def create_triplets(df):
 
     return triplets
 
-def count_triplets_with_spark(spark, input_dir):
-    # Load all .json files as a DataFrame
-    df = spark.read.json(f"{input_dir}/*.json", multiLine=False)
-
-    # Count rows (each row is one triplet)
-    count = df.count()
-
-    spark.stop()
-    return count
 
 
 if __name__ == "__main__":
     INPUT_DIR = r"../data/processed/wikidata_json"
     OUTPUT_DIR = r"../data/processed/triplets/parts"
-    OUTPUT_PATH = r"../data/custom_model/article_metadata.json"
+    ARTICLE_METADATA_OUTPUT_PATH = r"../data/custom_model/article_metadata.json"
+    PARAGRAPH_METADATA_OUTPUT_DIR = r"../data/custom_model/paragraph_metadata"
 
     spark = SparkSession.builder \
         .appName("TripletCreator") \
         .master("local[*]") \
-        .config("spark.driver.memory", "24g") \
+        .config("spark.driver.memory", "20g") \
         .config("spark.sql.shuffle.partitions", "100") \
         .config("spark.local.dir", "../spark-temp") \
         .config("spark.driver.maxResultSize", "2g") \
@@ -109,13 +122,16 @@ if __name__ == "__main__":
 
     print("Loading JSON input")
     input_df = spark.read.option("multiLine", True).json(f"{INPUT_DIR}/**/*.json")
+    create_article_metadata(input_df, ARTICLE_METADATA_OUTPUT_PATH)
 
-    create_article_metadata(spark, input_df, OUTPUT_PATH)
+    df = create_paragraphs_df(input_df)
+    create_paragraph_metadata(df, PARAGRAPH_METADATA_OUTPUT_DIR)
 
-    df = create_paragraphs_df(spark, input_df)
-    triplets = create_triplets(df)
-
+    triplets = create_random_triplets(df)
     print(f"Writing triplets to Spark part files: {OUTPUT_DIR}")
     triplets.write.mode("overwrite").json(OUTPUT_DIR)
+
+    total_lines = spark.read.json(f"{INPUT_DIR}/*.json", multiLine=False).count()
+    print("Total lines across training files:", total_lines)
 
     spark.stop()

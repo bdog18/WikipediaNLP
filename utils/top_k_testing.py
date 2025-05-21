@@ -146,19 +146,45 @@ def evaluate_all_metrics(test_set, retrieval_function, ks=[1, 3, 5, 10]):
     return metrics
 
 
-# Example dummy model for testing
-def dummy_retrieval_function(query):
+def retrieval_function(query):
     """
-    Dummy retrieval function — always returns the same fixed list of article titles.
-    Replace with your actual semantic search or embedding model logic.
+    Wraps your search function to return only a list of titles (strings) 
+    for compatibility with metric functions.
     """
-    return ["World War II", "Adolf Hitler", "Axis powers", "Invasion of Poland"]
+    # Replace this with your real search logic
+    results = semantic_search(query)  # <- returns list of dicts
+    return [r["title"] for r in results]
+
+
+def semantic_search(query):
+    return [
+        {'title': 'Whitson, Texas',
+        'url': 'https://en.wikipedia.org/wiki?curid=74340115'},
+        {'title': 'My Kink Is Karma',
+        'url': 'https://en.wikipedia.org/wiki?curid=74920372'},
+        {'title': 'Marcial Moreno-Mañas',
+        'url': 'https://en.wikipedia.org/wiki?curid=74635281'},
+        {'title': 'Iran at the 2022 Asian Games',
+        'url': 'https://en.wikipedia.org/wiki?curid=74864425'},
+        {'title': 'Sir Charles Saxton, 2nd Baronet',
+        'url': 'https://en.wikipedia.org/wiki?curid=74896144'},
+        {'title': "List of Girls' Crystal comic stories",
+        'url': 'https://en.wikipedia.org/wiki?curid=74899201'},
+        {'title': 'Not My Neighbour',
+        'url': 'https://en.wikipedia.org/wiki?curid=74886103'},
+        {'title': 'Alaska Airlines Flight 2059',
+        'url': 'https://en.wikipedia.org/wiki?curid=75127810'},
+        {'title': 'Ting Ting Chaoro',
+        'url': 'https://en.wikipedia.org/wiki?curid=74877608'},
+        {'title': 'Detdet Pepito',
+        'url': 'https://en.wikipedia.org/wiki?curid=74590708'}
+    ]
 
 
 # Run evaluation with dummy model
 if __name__ == "__main__":
     test_set = load_test_set("../data/test_data/test_queries.json")
-    results = evaluate_all_metrics(test_set, dummy_retrieval_function)
+    results = evaluate_all_metrics(test_set, retrieval_function)
 
     print("Evaluation Metrics:")
     for metric, value in results.items():
