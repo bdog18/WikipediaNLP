@@ -66,7 +66,7 @@ def create_paragraph_metadata(df, output_path):
 
     print(f"Saving paragraph metadata to: {output_path}")
     metadata_df.write.mode("overwrite").json(output_path)
-    print("✅ Paragraph metadata written as JSONL (Spark JSON format)")
+    print("Paragraph metadata written as JSONL (Spark JSON format)")
 
 
 def create_random_triplets(df):

@@ -3,23 +3,18 @@ import json
 import os
 import re
 from lxml import etree
-try:
-    from tqdm.notebook import tqdm
-except ImportError:
-    from tqdm import tqdm
+from tqdm import tqdm
 
 def clean_text(text):
     """
     Cleans input text by decoding HTML entities, removing escaped newlines, 
     and normalizing whitespace.
     """
-    # Unescape HTML entities (e.g., &quot;)
     text = html.unescape(text)
-
-    # Normalize whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-
-    return text
+    text = re.sub(r'\s*\n\s*\n\s*', '\n', text)  # normalize paragraph breaks
+    text = re.sub(r'[ \t]+', ' ', text)            # normalize spaces
+    text = '\n'.join(line.strip() for line in text.splitlines())
+    return text.strip().replace("\n", "\n\n")
 
 
 def delete_files_in_dir_based_on_ext(folder_path, ext):
@@ -122,8 +117,39 @@ def traverse_directory(input_dir, output_dir):
         save_json(output_file_path, doc_data)
 
 
+
+def convert_json_array_to_jsonl(input_dir, output_dir):
+    # Gather all input JSON files from subdirectories
+    all_files = []
+    for root, _, files in os.walk(input_dir):
+        for file in files:
+            if file.endswith(".json"):
+                all_files.append(os.path.join(root, file))
+
+    # Create the output directory structure and convert files
+    for input_path in tqdm(all_files, desc="Converting JSON to JSONL", unit="file"):
+        rel_path = os.path.relpath(os.path.dirname(input_path), input_dir)
+        target_dir = os.path.join(output_dir, rel_path)
+        os.makedirs(target_dir, exist_ok=True)
+
+        output_path = os.path.join(target_dir, os.path.basename(input_path) + "l")
+
+        try:
+            with open(input_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    with open(output_path, "w", encoding="utf-8") as out:
+                        for obj in data:
+                            json.dump(obj, out, ensure_ascii=False)
+                            out.write("\n")
+        except Exception as e:
+            print(f"Skipped {input_path}: {e}")
+
+
 if __name__ == "__main__":
     INPUT_DIR = r'../data/raw/extracted_wikidata'
-    OUTPUT_DIR = r'../data/processed/wikidata_json'
+    OUTPUT_DIR = r'../data/processed/wikidata_json_para'
+    JSONL_DIR = r"../data/processed/wikidata_jsonl"
 
     traverse_directory(INPUT_DIR, OUTPUT_DIR)
+    convert_json_array_to_jsonl(OUTPUT_DIR, JSONL_DIR)

@@ -9,9 +9,6 @@ try:
 except ImportError:
     from tqdm import tqdm
 
-# -----------------------------
-# Transformer Encoder Components
-# -----------------------------
 class TransformerBlock(layers.Layer):
     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
         super().__init__()
@@ -48,9 +45,6 @@ class CustomEncoder(Model):
         return self.pooling(x)
 
 
-# -----------------------------
-# Triplet Loss Function
-# -----------------------------
 def triplet_loss(anchor, positive, negative, margin=0.3):
     pos_dist = tf.reduce_sum(tf.square(anchor - positive), axis=1)
     neg_dist = tf.reduce_sum(tf.square(anchor - negative), axis=1)
@@ -58,9 +52,6 @@ def triplet_loss(anchor, positive, negative, margin=0.3):
     return tf.reduce_mean(loss)
 
 
-# -----------------------------
-# Keras Model for Training
-# -----------------------------
 class TripletTrainer(Model):
     def __init__(self, encoder):
         super().__init__()
@@ -85,9 +76,6 @@ class TripletTrainer(Model):
         return {"loss": self.loss_tracker.result()}
 
 
-# -----------------------------
-# Vectorizer Functions
-# -----------------------------
 def create_vectorizer(input_dir, vectorizer_path, vocab_size, max_len):
     print("Fitting vectorizer on all data (streamed)")
     vectorizer = layers.TextVectorization(
@@ -123,9 +111,6 @@ def create_vectorizer(input_dir, vectorizer_path, vocab_size, max_len):
     return
 
 
-# -----------------------------
-# Data Preparation Function
-# -----------------------------
 def load_triplet_dataset(json_dir, vectorizer, batch_size):
     anchors, positives, negatives = [], [], []
     for file in sorted(os.listdir(json_dir)):
