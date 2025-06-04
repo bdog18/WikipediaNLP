@@ -151,6 +151,7 @@ if __name__ == '__main__':
     batch_size = 512
     num_epochs = 30
     learning_rate = 1e-4
+    total_lines = 15123359
     weights_dir = "../data/custom_model"
 
     # Load or create vectorizer
@@ -165,6 +166,9 @@ if __name__ == '__main__':
 
     # Model setup
     encoder = CustomEncoder(vocab_size, max_len, embed_dim, num_heads, ff_dim)
+    if os.path.exists(f"{weights_dir}/best_encoder.weights.h5"):
+        print("Loading best weights")
+        encoder.load_weights(f"{weights_dir}/best_encoder.weights.h5")
     trainer = TripletTrainer(encoder)
     trainer.compile(optimizer=tf.keras.optimizers.Adam(learning_rate))
 
@@ -178,7 +182,6 @@ if __name__ == '__main__':
             save_weights_only=True
         )
     ]
-    total_lines = 15123359
     # Training
     trainer.fit(
         train_dataset.repeat(),  # infinite generator
