@@ -1,34 +1,17 @@
 import os
-import sys
+import faiss
+import gc
 import json
 import shelve
+import sys
 import random
-from tqdm import tqdm
+from multiprocessing import Pool
 from sentence_transformers import SentenceTransformer
-import faiss
-from multiprocessing import Pool, cpu_count
-import gc
+from tqdm import tqdm
 
-# Add root directory (one level up from notebooks/)
+# Add root directory
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 from utils.sqlite_lookup import load_linkgraph_sqlite, get_links_for_title_sqlite
-
-# CONFIGURATION
-WIKI_DATA_DIR_JSONL = "../data/processed/wikidata_jsonl"
-LINK_GRAPH_PATH = "../data/processed/wiki_link_graph.db"
-PARAGRAPH_DB_PATH = "../data/processed/paragraphs_shelve.db"
-TRIPLET_OUTPUT_DIR = "../data/processed/triplets/parallel_parts"
-FAISS_INDEX_PATH = "../data/processed/faiss_index/paragraphs.index"
-FAISS_META_PATH = FAISS_INDEX_PATH + ".meta.json"
-MODEL_NAME = "all-MiniLM-L6-v2"
-MAX_TRIPLETS_PER_ARTICLE = 5
-NEGATIVE_POOL_SIZE = 5
-
-index = None
-all_texts = None
-text_to_meta = None
-article_titles = None
-model = None
 
 
 def stream_article_lines(data_dir):
@@ -53,21 +36,9 @@ def load_faiss_index(index_path, meta_path):
     return index, meta["all_texts"], meta["text_to_meta"]
 
 
-def load_articles_titles_only(data_dir):
-    article_titles = {}
-    files = [os.path.join(root, file)
-             for root, _, filenames in os.walk(data_dir)
-             for file in filenames if file.endswith(".jsonl")]
-    for file_path in tqdm(files, desc="Loading Article Titles"):
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    article = json.loads(line)
-                    title = article.get("title")
-                    if title:
-                        article_titles[title] = article.get("url", "")
-                except json.JSONDecodeError:
-                    continue
+def load_articles_titles_only(json_file):
+    with open(json_file, "r", encoding="utf-8") as f:
+        article_titles = json.load(f)
     return article_titles
 
 
@@ -154,16 +125,39 @@ def mine_triplets_from_file(file_path):
     gc.collect()
     return None
 
+
+# CONFIGURATION
+WIKI_DATA_DIR_JSONL = "../data/processed/wikidata_jsonl"
+TITLES_JSON = "../data/processed/article_titles.json"
+LINK_GRAPH_PATH = "../data/processed/wiki_link_graph.db"
+PARAGRAPH_DB_PATH = "../data/processed/paragraphs_shelve.db"
+TRIPLET_OUTPUT_DIR = "../data/processed/triplets/parallel_parts"
+FAISS_INDEX_PATH = "../data/processed/faiss_index/paragraphs.index"
+FAISS_META_PATH = FAISS_INDEX_PATH + ".meta.json"
+MODEL_NAME = "all-MiniLM-L6-v2"
+MAX_TRIPLETS_PER_ARTICLE = 5
+NEGATIVE_POOL_SIZE = 5
+
+index = None
+all_texts = None
+text_to_meta = None
+article_titles = None
+model = None
+
 if __name__ == "__main__":
     os.makedirs(TRIPLET_OUTPUT_DIR, exist_ok=True)
-    article_titles = load_articles_titles_only(WIKI_DATA_DIR_JSONL)
+    article_titles = load_articles_titles_only(TITLES_JSON)
     index, all_texts, text_to_meta = load_faiss_index(FAISS_INDEX_PATH, FAISS_META_PATH)
 
     files = [os.path.join(root, file)
              for root, _, filenames in os.walk(WIKI_DATA_DIR_JSONL)
              for file in filenames if file.endswith(".jsonl")]
 
-    with Pool(processes=4) as pool:
-        results = list(tqdm(pool.imap_unordered(mine_triplets_from_file, files, chunksize=2), total=len(files), desc="Parallel Triplet Mining"))
+    with Pool(processes=3, maxtasksperchild=10) as pool:
+        results = list(tqdm(pool.imap_unordered(mine_triplets_from_file, 
+                        files, 
+                        chunksize=2), 
+                        total=len(files), 
+                        desc="Parallel Triplet Mining"))
 
     print(f"Triplet Writing Complete")

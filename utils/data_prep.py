@@ -146,10 +146,32 @@ def convert_json_array_to_jsonl(input_dir, output_dir):
             print(f"Skipped {input_path}: {e}")
 
 
+def save_article_titles(data_dir, output_path):
+    article_titles = {}
+    files = [os.path.join(root, file)
+             for root, _, filenames in os.walk(data_dir)
+             for file in filenames if file.endswith(".jsonl")]
+    for file_path in tqdm(files, desc="Loading Article Titles From Files", unit="file"):
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    article = json.loads(line)
+                    title = article.get("title")
+                    if title:
+                        article_titles[title] = article.get("url", "")
+                except json.JSONDecodeError:
+                    continue
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(article_titles, f)
+
+
+
 if __name__ == "__main__":
     INPUT_DIR = r'../data/raw/extracted_wikidata'
     OUTPUT_DIR = r'../data/processed/wikidata_json_para'
     JSONL_DIR = r"../data/processed/wikidata_jsonl"
+    JSON_TITLE_DIR = r"../data/processed/article_titles.json"
 
-    traverse_directory(INPUT_DIR, OUTPUT_DIR)
-    convert_json_array_to_jsonl(OUTPUT_DIR, JSONL_DIR)
+    # traverse_directory(INPUT_DIR, OUTPUT_DIR)
+    # convert_json_array_to_jsonl(OUTPUT_DIR, JSONL_DIR)
+    save_article_titles(JSONL_DIR, JSON_TITLE_DIR)
